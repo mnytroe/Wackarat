@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { RotateCcw, Trophy, TrendingUp, TrendingDown, Coins } from 'lucide-react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
 
 const BaccaratGame = () => {
   const [gameState, setGameState] = useState('betting');
@@ -17,6 +17,8 @@ const BaccaratGame = () => {
   const [history, setHistory] = useState([]);
   const [winner, setWinner] = useState(null);
   const [showConfetti, setShowConfetti] = useState(false);
+  const [playerAnimationFlags, setPlayerAnimationFlags] = useState([]);
+  const [bankerAnimationFlags, setBankerAnimationFlags] = useState([]);
 
   const suits = ['♠', '♥', '♦', '♣'];
   const values = ['A', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K'];
@@ -80,6 +82,8 @@ const BaccaratGame = () => {
 
     setBet(betOn);
     setGameState('playing');
+    setPlayerAnimationFlags([]);
+    setBankerAnimationFlags([]);
     setGameLog('');
     setWinner(null);
     setShowConfetti(false);
@@ -99,12 +103,22 @@ const BaccaratGame = () => {
       currentDeck = deck1;
       pHand.push(pCard);
       setPlayerHand([...pHand]);
+      setPlayerAnimationFlags(prev => {
+        const next = [...prev];
+        next[pHand.length - 1] = true;
+        return next;
+      });
 
       await new Promise(resolve => setTimeout(resolve, delays[i * 2 + 1]));
       const { card: bCard, newDeck: deck2 } = drawCard(currentDeck);
       currentDeck = deck2;
       bHand.push(bCard);
       setBankerHand([...bHand]);
+      setBankerAnimationFlags(prev => {
+        const next = [...prev];
+        next[bHand.length - 1] = true;
+        return next;
+      });
     }
 
     let pScore = calculateScore(pHand);
@@ -128,6 +142,11 @@ const BaccaratGame = () => {
       currentDeck = deck3;
       pHand.push(newCard);
       setPlayerHand([...pHand]);
+      setPlayerAnimationFlags(prev => {
+        const next = [...prev];
+        next[pHand.length - 1] = true;
+        return next;
+      });
       pScore = calculateScore(pHand);
       setPlayerScore(pScore);
       log.push(`📥 Spiller trekker (poeng ≤ 5): ${newCard}`);
@@ -172,6 +191,11 @@ const BaccaratGame = () => {
       currentDeck = deck4;
       bHand.push(newCard);
       setBankerHand([...bHand]);
+      setBankerAnimationFlags(prev => {
+        const next = [...prev];
+        next[bHand.length - 1] = true;
+        return next;
+      });
       bScore = calculateScore(bHand);
       setBankerScore(bScore);
       log.push(`${bankerReason}: ${newCard}`);
@@ -244,39 +268,78 @@ const BaccaratGame = () => {
     setBet('');
     setGameLog('');
     setWinner(null);
+    setPlayerAnimationFlags([]);
+    setBankerAnimationFlags([]);
   };
 
-  const Card = ({ card, index, isWinning = false }) => {
+  const handleCardAnimationComplete = (hand, index) => {
+    if (hand === 'player') {
+      setPlayerAnimationFlags(prev => {
+        if (!prev[index]) return prev;
+        const next = [...prev];
+        next[index] = false;
+        return next;
+      });
+    } else {
+      setBankerAnimationFlags(prev => {
+        if (!prev[index]) return prev;
+        const next = [...prev];
+        next[index] = false;
+        return next;
+      });
+    }
+  };
+
+  const Card = ({ card, index, isWinning = false, shouldAnimate = false, onAnimationComplete }) => {
     const suit = card.slice(-1);
     const value = card.slice(0, -1);
     const isRed = suit === '♥' || suit === '♦';
     const suitSymbol = suit;
 
-    return (
-      <motion.div
-        initial={{ x: -100, opacity: 0, rotateY: 90, scale: 0.8 }}
-        animate={{ 
-          x: 0, 
-          opacity: 1, 
-          rotateY: 0, 
-          scale: 1,
-          boxShadow: isWinning ? '0 0 20px rgba(255, 215, 0, 0.8)' : '0 4px 6px rgba(0, 0, 0, 0.3)'
-        }}
-        transition={{ 
-          duration: 0.5,
-          delay: index * 0.1,
-          type: "spring",
-          stiffness: 200
-        }}
-        className={`relative w-20 h-28 bg-white rounded-lg border-2 ${isWinning ? 'border-yellow-400 border-4' : 'border-gray-300'} flex flex-col items-center justify-center text-xl font-bold shadow-lg overflow-hidden ${isRed ? 'text-red-600' : 'text-black'}`}
-      >
-        {/* Kortdesign */}
+    const cardContent = (
+      <>
         <div className="absolute top-1 left-1 text-sm font-bold">{value}</div>
         <div className="absolute top-1 right-1 text-sm">{suitSymbol}</div>
         <div className="text-4xl">{suitSymbol}</div>
         <div className="absolute bottom-1 right-1 text-sm font-bold transform rotate-180">{value}</div>
         <div className="absolute bottom-1 left-1 text-sm transform rotate-180">{suitSymbol}</div>
-      </motion.div>
+      </>
+    );
+
+    if (shouldAnimate) {
+      return (
+        <motion.div
+          initial={{ x: -100, opacity: 0, rotateY: 90, scale: 0.8 }}
+          animate={{ 
+            x: 0, 
+            opacity: 1, 
+            rotateY: 0, 
+            scale: 1,
+            boxShadow: isWinning ? '0 0 20px rgba(255, 215, 0, 0.8)' : '0 4px 6px rgba(0, 0, 0, 0.3)'
+          }}
+          transition={{ 
+            duration: 0.5,
+            delay: 0,
+            type: "spring",
+            stiffness: 200
+          }}
+          onAnimationComplete={onAnimationComplete}
+          className={`relative w-20 h-28 bg-white rounded-lg border-2 ${isWinning ? 'border-yellow-400 border-4' : 'border-gray-300'} flex flex-col items-center justify-center text-xl font-bold shadow-lg overflow-hidden ${isRed ? 'text-red-600' : 'text-black'}`}
+        >
+          {cardContent}
+        </motion.div>
+      );
+    }
+
+    return (
+      <div
+        className={`relative w-20 h-28 bg-white rounded-lg border-2 ${isWinning ? 'border-yellow-400 border-4' : 'border-gray-300'} flex flex-col items-center justify-center text-xl font-bold shadow-lg overflow-hidden ${isRed ? 'text-red-600' : 'text-black'}`}
+        style={{
+          boxShadow: isWinning ? '0 0 20px rgba(255, 215, 0, 0.8)' : '0 4px 6px rgba(0, 0, 0, 0.3)'
+        }}
+      >
+        {cardContent}
+      </div>
     );
   };
 
@@ -453,11 +516,16 @@ const BaccaratGame = () => {
                     </motion.span>
                   </div>
                   <div className="flex gap-3 flex-wrap">
-                    <AnimatePresence>
-                      {bankerHand.map((card, i) => (
-                        <Card key={i} card={card} index={i} isWinning={winner === 'banker'} />
-                      ))}
-                    </AnimatePresence>
+                    {bankerHand.map((card, i) => (
+                      <Card 
+                        key={`${card}-${i}`}
+                        card={card} 
+                        index={i} 
+                        isWinning={winner === 'banker'} 
+                        shouldAnimate={!!bankerAnimationFlags[i]}
+                        onAnimationComplete={() => handleCardAnimationComplete('banker', i)}
+                      />
+                    ))}
                   </div>
                 </motion.div>
 
@@ -484,11 +552,16 @@ const BaccaratGame = () => {
                     </motion.span>
                   </div>
                   <div className="flex gap-3 flex-wrap">
-                    <AnimatePresence>
-                      {playerHand.map((card, i) => (
-                        <Card key={i} card={card} index={i} isWinning={winner === 'player'} />
-                      ))}
-                    </AnimatePresence>
+                    {playerHand.map((card, i) => (
+                      <Card 
+                        key={`${card}-${i}`} 
+                        card={card} 
+                        index={i} 
+                        isWinning={winner === 'player'} 
+                        shouldAnimate={!!playerAnimationFlags[i]}
+                        onAnimationComplete={() => handleCardAnimationComplete('player', i)}
+                      />
+                    ))}
                   </div>
                 </motion.div>
 
@@ -596,7 +669,7 @@ const BaccaratGame = () => {
             </motion.div>
 
             {/* Historikk */}
-            <div className="bg-gray-800 bg-opacity-80 rounded-xl p-6 shadow-xl sticky top-4 max-h-[600px] overflow-y-auto">
+            <div className="bg-gray-800 bg-opacity-80 rounded-xl p-6 shadow-xl sticky top-4 max-h-[600px] overflow-y-auto history-scrollbar">
               <h3 className="text-2xl font-bold text-yellow-300 mb-4 flex items-center gap-2">
                 <Trophy size={24} />
                 Historikk
